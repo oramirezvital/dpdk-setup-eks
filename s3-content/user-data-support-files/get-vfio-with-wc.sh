@@ -50,7 +50,7 @@ function download_kernel_src_yum {
 
 	bold "\nInstall required applications and kernel headers"
 	yum install -y gcc "kernel-$(uname -r)" "kernel-devel-$(uname -r)" \
-	    git make elfutils-libelf-devel patch
+	    git make elfutils-libelf-devel patch yum-utils
 	green Done
 
 	# Download kernel source
@@ -74,7 +74,7 @@ function download_kernel_src_apt {
 	green Done
 
 	bold "\nDownload Linux kernel source with vfio"
-	if ! apt-get -q -y source linux-image-$(uname -r); then
+	if ! apt-get -q -y source linux-image-unsigned-$(uname -r); then
 		err "Cannot download Linux kernel source.\nPlease uncomment appropriate 'deb-src' line in the /etc/apt/sources.list file"
 		exit 1
 	fi
@@ -98,7 +98,13 @@ function download_kernel_src {
 }
 
 function apply_wc_patch {
-	if [ "${KERNEL_VERSION}" -ge 5080000 ]; then
+        if [ "${KERNEL_VERSION}" -ge 6080000 ]; then
+                echo "Using patch for kernel version 6.8"
+                local wc_patch="${BASE_PATH}/patches/linux-6.8-vfio-wc.patch"
+        elif [ "${KERNEL_VERSION}" -ge 5150000 ]; then
+                echo "Using patch for kernel version 5.15"
+                local wc_patch="${BASE_PATH}/patches/linux-5.15-vfio-wc.patch"
+ 	elif [ "${KERNEL_VERSION}" -ge 5080000 ]; then
 		echo "Using patch for kernel version 5.8"
 		local wc_patch="${BASE_PATH}/patches/linux-5.8-vfio-wc.patch"
 	elif [ "${KERNEL_VERSION}" -ge 4100000 ]; then
@@ -156,24 +162,37 @@ function get_module_location {
 function get_module_compression {
 	if ls "${MOD_PATH}/vfio.ko.xz" >/dev/null 2>/dev/null; then
 		XZ=".xz"
+        elif  ls "${MOD_PATH}/vfio.ko.zst" >/dev/null 2>/dev/null; then
+                XZ=".zst"
 	else
 		XZ=""
 	fi
 }
 
 function replace_module {
+	local installed=0
+
 	bold "\n[3] Install module"
 	get_module_location
 	get_module_compression
 
-	for name in "pci/vfio-pci.ko" "vfio.ko"; do
-		if [ -n "${XZ}" ]; then
-			xz "${name}" -c > "${name}${XZ}"
+	for name in "pci/vfio-pci.ko" "pci/vfio-pci-core.ko" "vfio.ko"; do
+		if test -e "${MOD_PATH}/${name}${XZ}"; then
+			if [ -n "${XZ}" ]; then
+				xz "${name}" -c > "${name}${XZ}"
+			fi
+			mv "${MOD_PATH}/${name}${XZ}" "${MOD_PATH}/${name}${XZ}_no_wc"
+			cp "${name}${XZ}" "${MOD_PATH}/${name}${XZ}"
+			bold "Installing: ${MOD_PATH}/${name}${XZ}"
+			installed=1
 		fi
-		mv "${MOD_PATH}/${name}${XZ}" "${MOD_PATH}/${name}${XZ}_no_wc"
-		cp "${name}${XZ}" "${MOD_PATH}/${name}${XZ}"
 	done
-	green "Module installed at: ${MOD_PATH}/${name}${XZ}"
+	if [ "${installed}" -eq 1 ]; then
+		green "Module installed at: ${MOD_PATH}"
+	else
+		err "Failure during vfio-pci module installation. Prehaps it's not provided as a kernel module!"
+		exit 1
+	fi
 }
 
 ###############################################

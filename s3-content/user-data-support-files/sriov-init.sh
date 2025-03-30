@@ -16,6 +16,8 @@ mkdir patches;cd patches
 
 /bin/aws s3api get-object --bucket S3BucketName --key linux-4.10-vfio-wc.patch ./linux-4.10-vfio-wc.patch
 /bin/aws s3api get-object --bucket S3BucketName --key linux-5.8-vfio-wc.patch ./linux-5.8-vfio-wc.patch
+/bin/aws s3api get-object --bucket S3BucketName --key linux-5.15-vfio-wc.patch ./linux-5.15-vfio-wc.patch
+/bin/aws s3api get-object --bucket S3BucketName --key linux-6.8-vfio-wc.patch ./linux-6.8-vfio-wc.patch
 cd ..
 ./get-vfio-with-wc.sh
 
